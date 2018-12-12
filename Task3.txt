@@ -1,0 +1,41 @@
+/*начальные точки маршрутов*/
+with start_point (rn,CarId,Start_point_id, LoadSP,DepartureTime) as
+(
+  SELECT
+	row_number() over (PARTITION BY CarId order by DepartureTime), Routs.CarId, Routs.PointId, Routs.LoadCar, Routs.DepartureTime
+  FROM Routs  join Points on Routs.PointId = Points.Id  where Points.TypeId = 'D' 
+),
+
+shop_point (rn, CarId, Shop_point_id, Loadshp, ArrivalTime, routsId) as
+(SELECT 
+        row_number() over (PARTITION BY CarId order by ArrivalTime), Routs.CarId, Routs.PointId, Routs.LoadCar, Routs.ArrivalTime, Routs.Id
+  FROM Routs join Points on Routs.PointId = Points.Id where Points.TypeId = 'S' 
+),
+
+/конечные точки маршрутов*/
+end_point (ArrivalTime,rn,CarId) as
+(
+	select  max(ArrivalTime), row_number() over (PARTITION BY sh.CarId order by max(ArrivalTime)), sh.CarId
+    from shop_point sh join start_point st on sh.CarId = st.CarId where sh.ArrivalTime < st.DepartureTime group by st.rn, sh.CarId 
+)
+/*топ 3 на начале маршрута*/
+/*SELECT top 3 (st.LoadSP*100/Capacity) as procent, st.*, ep.ArrivalTime
+from start_point st left join Cars on st.CarId = Cars.Id left join end_point ep on st.CarId = ep.CarId and st.rn = ep.rn order by procent desc*/
+
+/*топ 3 в конце маршрута*/
+/*SELECT top 3 (sh.Loadshp*100/Capacity) as procent,st.DepartureTime, ep.*
+from end_point ep left join Cars on ep.CarId = Cars.Id left join shop_point sh on sh.CarId = ep.CarId and sh.ArrivalTime = ep.ArrivalTime left join start_point st
+on st.CarId = ep.CarId and st.rn = ep.rn order by procent desc*/
+
+/*топ 3 маршрутов (недогруженных машин в начале)*/
+/*select * from Routs rt where exists
+(select * from(SELECT top 3 (st.LoadSP*100/Capacity) as procent, st.*,ep.ArrivalTime
+from start_point st left join Cars on st.CarId = Cars.Id left join end_point ep on st.CarId = ep.CarId and st.rn = ep.rn order by procent desc) as topSt 
+where rt.CarId = topSt.CarId and rt.DepartureTime>= topSt.DepartureTime and rt.ArrivalTime<=topSt.ArrivalTime) order by ArrivalTime*/
+
+/*топ 3 маршрутов (недогруженных машин в конце)*/
+select * from Routs rt where exists
+(select * from (SELECT top 3 (sh.Loadshp*100/Capacity) as procent,st.DepartureTime, ep.*
+from end_point ep left join Cars on ep.CarId = Cars.Id left join shop_point sh on sh.CarId = ep.CarId and sh.ArrivalTime = ep.ArrivalTime left join start_point st
+on st.CarId = ep.CarId and st.rn = ep.rn order by procent desc) as topSt 
+where rt.CarId = topSt.CarId and rt.DepartureTime>= topSt.DepartureTime and rt.ArrivalTime<=topSt.ArrivalTime) order by ArrivalTime
